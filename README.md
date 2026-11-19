@@ -92,7 +92,7 @@ Keep that window open while you use Cliphound. To stop it, press `Ctrl + C` or c
 
 Your Shorts appear under **Your Shorts** as they're made. The strip above them shows the whole stream, with orange marks where each Short came from. Each Short has:
 
-- **Download** to save the video file.
+- **Download** to save the video file, ready to post anywhere yourself.
 - **Edit** to change its title and description.
 - **Post** to put it on your YouTube channel (once you've connected YouTube, see below).
 - **Remove** if you don't want it.
@@ -110,7 +110,9 @@ Also fill in **What your channel is about** in the same section. The AI uses it 
 
 ## Optional: post to YouTube
 
-To post, Cliphound needs permission from Google. Google makes every app do this through a free "Cloud project" that you own. It's a one-time setup of about 10 minutes, and none of it costs money.
+**You can skip this whole section.** Posting from Cliphound is optional. Just press **Download** on any Short and upload it yourself, to YouTube Shorts, TikTok, Instagram Reels or anywhere else. The file is a finished 1080x1920 vertical video with captions, ready to post as it is. Doing it this way also means your Shorts go up as public straight away.
+
+If you'd rather have Cliphound post for you, read on. To post, Cliphound needs permission from Google. Google makes every app do this through a free "Cloud project" that you own. It's a one-time setup of about 10 minutes, and none of it costs money.
 
 ### 1. Create the project
 
