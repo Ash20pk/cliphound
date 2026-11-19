@@ -169,15 +169,18 @@ def transcribe(video: Path, start: float, end: float, model: str) -> list[dict]:
     return segs
 
 
-def refine(video: Path, cands: list[dict], settings: dict, total_s: float, log, check=lambda: None) -> list[dict]:
+def refine(video: Path | None, cands: list[dict], settings: dict, total_s: float, log, check=lambda: None,
+           segs_for=None) -> list[dict]:
+    """Transcribe (or, with `segs_for`, look up) each candidate, score its words and snap the cut
+    to sentence boundaries."""
     hype = [h.lower() for h in settings["hype_words"]]
     max_len = 59.0
     for k, c in enumerate(cands, 1):
         check()
-        if len(cands) > 1:
+        if len(cands) > 1 and not segs_for:
             log(f"Listening to moment {k} of {len(cands)} at {fmt(c['peak'])}")
         lo, hi = max(0.0, c["start"] - 6), min(total_s, c["end"] + 6)
-        segs = transcribe(video, lo, hi, settings["whisper_model"])
+        segs = segs_for(lo, hi) if segs_for else transcribe(video, lo, hi, settings["whisper_model"])
         c["segs"], c["win_start"], c["win_end"] = segs, lo, hi   # kept for AI mode
         text = " ".join(s["text"] for s in segs if s["e"] > c["start"] and s["s"] < c["end"]).lower()
         hits = sum(text.count(h) for h in hype)
@@ -259,6 +262,112 @@ def find_clips(audio: Path, chat: list[float], settings: dict, n: int, clip_s: f
     picked = picked or ranked[:n]
     picked.sort(key=lambda c: c["start"])
     return picked, waveform(db), total
+
+
+# Transcript mode ----------------------------------------------------------------------
+# When the platform already has a transcript (finished YouTube streams), the moments are found
+# from the words alone: no audio download at all. Excited streamers talk faster, repeat
+# themselves ("no no no", "go go go") and say the hype words, and those show up in the text.
+
+_TAGS = {"[laughter]": 4.0, "[laughs]": 4.0, "[applause]": 3.0, "[cheering]": 3.0, "[screaming]": 4.0}
+
+
+def _norm(w: str) -> str:
+    return "".join(ch for ch in w.lower() if ch.isalnum() or ch in "[]'")
+
+
+def segments_from_words(words: list[dict]) -> list[dict]:
+    """Group words into sentence-like segments the way Whisper returns them."""
+    segs, cur = [], []
+    for w in words:
+        if cur and (w["s"] - cur[-1]["e"] > 0.7 or len(cur) >= 14):
+            segs.append(cur)
+            cur = []
+        cur.append(w)
+        if w["w"].endswith((".", "!", "?")):
+            segs.append(cur)
+            cur = []
+    if cur:
+        segs.append(cur)
+    return [{"text": " ".join(x["w"] for x in g), "s": g[0]["s"], "e": g[-1]["e"], "words": g} for g in segs]
+
+
+def speech_score(words: list[dict], total_s: float, settings: dict) -> np.ndarray:
+    n = int(total_s / WIN) + 1
+    counts = np.zeros(n)
+    events = np.zeros(n)
+    hype = [h.lower() for h in settings["hype_words"]]
+    singles = {h for h in hype if " " not in h}
+    pairs = {h for h in hype if h.count(" ") == 1}
+    prev = ["", ""]
+    for w in words:
+        i = min(n - 1, int(w["s"] / WIN))
+        t = _norm(w["w"])
+        if t.startswith("["):
+            events[i] += _TAGS.get(t, 0.0)
+            continue
+        counts[i] += 1
+        if t in singles or f"{prev[-1]} {t}" in pairs:
+            events[i] += 2.0
+        if len(t) >= 2 and t in prev:
+            events[i] += 1.5           # "no no no", "go go go"
+        prev = [prev[-1], t]
+    rate = _smooth(counts / WIN, 3)                     # words per second
+    base = _baseline(rate)
+    raw = np.clip((rate - base) / 0.75, -3, 8)
+    return _smooth(raw, 3) + _smooth(events, 4) * 3
+
+
+def speech_wave(words: list[dict], total_s: float, bins: int = 720) -> list[float]:
+    """Stream overview for the UI from how much is being said, when there's no audio scan."""
+    if not words or total_s <= 0:
+        return []
+    counts, _ = np.histogram([w["s"] for w in words], bins=bins, range=(0, total_s))
+    top = np.percentile(counts, 95) or 1
+    return [round(float(np.clip(c / top, 0.02, 1)), 3) for c in counts]
+
+
+def find_clips_transcript(words: list[dict], settings: dict, n: int, clip_s: float, total_s: float, log,
+                          check=lambda: None, chooser=None) -> tuple[list[dict], list[float], float]:
+    total = max(total_s or 0, words[-1]["e"] if words else 0)
+    log(f"Reading the transcript of {fmt(total)} of stream")
+    segs = segments_from_words(words)
+    starts = np.array([s["s"] for s in segs])
+
+    def segs_for(lo, hi):
+        i = max(0, int(np.searchsorted(starts, lo)) - 1)
+        out = []
+        while i < len(segs) and segs[i]["s"] < hi:
+            if segs[i]["e"] > lo:
+                out.append(segs[i])
+            i += 1
+        return out
+
+    score = speech_score(words, total, settings)
+    check()
+    cands = candidates(score, min(n * 6, max(36, n * 2)) if chooser else n * 3, clip_s, total)
+    if not cands:
+        raise RuntimeError("Nothing in the transcript stood out, so there's nothing to clip")
+    log(f"Found {len(cands)} lively moments in the transcript; picking the best {n}")
+    ranked = refine(None, cands, settings, total, log, check, segs_for=segs_for)
+    picked = None
+    if chooser:
+        check()
+        try:
+            picked = chooser(ranked)
+        except Exception as e:
+            log(f"AI picking didn't work: {e}. Using the transcript scores instead")
+    picked = picked or ranked[:n]
+    for c in picked:
+        c["from_captions"] = True
+    picked.sort(key=lambda c: c["start"])
+    return picked, speech_wave(words, total), total
+
+
+def words_in(video: Path, start: float, end: float, settings: dict) -> list[dict]:
+    """Whisper's words for [start, end] of a short section, for exact burned-in captions."""
+    return [w for seg in transcribe(video, start, end, settings["whisper_model"]) for w in seg["words"]
+            if start <= w["s"] < end]
 
 
 def moment(section: Path, at_in_section: float, settings: dict, clip_s: float, log) -> dict:

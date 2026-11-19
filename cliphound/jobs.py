@@ -8,6 +8,7 @@ import threading
 import time
 import traceback
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from . import ai, analyze, download, render, sources, upload
@@ -19,6 +20,7 @@ _cancelled: set[str] = set()      # survives the job folder being deleted under 
 
 ID_RE = re.compile(r"^[0-9a-f]{10}$")
 NAME_RE = re.compile(r"^short_\d{2,}\.mp4$")
+FETCH_AHEAD = 3                   # clip videos downloaded at once
 RUNNING = ("queued", "fetching", "finding", "cutting", "uploading")
 
 
@@ -228,6 +230,7 @@ def _run(job_id: str):
         check()
         stage("fetching", "Opening the stream")
         prov = sources.provider(job["meta"], work, log, check)
+        prov.read_chat = bool(s.get("read_chat"))
         use_ai = job.get("use_ai") and ai.method(s) is not None
         if job.get("use_ai") and not use_ai and job["mode"] == "best" and not (work / "picks.json").exists():
             log("AI picking is on but not connected (Settings), so picking by loudness and speech")
@@ -253,56 +256,52 @@ def _run(job_id: str):
             log(f"Reusing {len(clips)} moments found earlier")
             picks = [(c, None, 0.0) for c in clips]
         else:
-            audio = prov.audio()
-            check()
-            chat = download.chat_times(getattr(prov, "chat", None))
-            stage("finding", "Measuring loudness across the stream")
             chooser = None
             if use_ai:
                 job["ai"] = True
                 chooser = lambda cands: ai.pick(s, job["meta"].get("title", ""), job["source"]["name"], cands,
                                                 job["clips_wanted"], log)
-            clips, wave, total = analyze.find_clips(audio, chat, s, job["clips_wanted"], L, log, check, chooser)
+            words = prov.transcript() if s.get("use_transcript", True) else None
+            check()
+            if words:
+                stage("finding", "Reading the transcript")
+                job["picked_by"] = "transcript"
+                clips, wave, total = analyze.find_clips_transcript(
+                    words, s, job["clips_wanted"], L, job.get("stream_length") or 0, log, check, chooser)
+            else:
+                audio = prov.audio()
+                check()
+                chat = download.chat_times(getattr(prov, "chat", None))
+                stage("finding", "Measuring loudness across the stream")
+                job["picked_by"] = "audio"
+                clips, wave, total = analyze.find_clips(audio, chat, s, job["clips_wanted"], L, log, check, chooser)
+                if job["meta"]["kind"] == "live":
+                    Path(audio).unlink(missing_ok=True)   # 500 MB+; the picks are what a retry needs
             clips = analyze.slim(clips)
             job["waveform"], job["stream_length"] = wave, total
             (work / "picks.json").write_text(json.dumps(clips))
-            if job["meta"]["kind"] == "live":
-                Path(audio).unlink(missing_ok=True)   # 500 MB+; the picks are what a retry needs
             _save(job)
             picks = [(c, None, 0.0) for c in clips]
 
         stage("cutting")
         credit = "" if job["meta"]["kind"] == "local" else f"@{job['source']['name']}"
         posted = job.get("posted") or {}
-        for i, (c, section, sec_start) in enumerate(picks, 1):
-            check()
-            out = work / f"short_{i:02d}.mp4"
-            if section is None and prov.owns_sections():
-                pad = 2.0
-                log(f"Fetching video for Short {i} ({analyze.fmt(c['start'])})")
-                section, sec_start = prov.section(max(0.0, c["start"] - pad), c["end"] + pad, work / f"section_{i:02d}")
-                local = dict(c, start=c["start"] - sec_start, end=c["end"] - sec_start,
-                             words=[dict(w, s=w["s"] - sec_start, e=w["e"] - sec_start) for w in c.get("words", [])])
-            elif section is None:
-                section, local = prov.section(0, 0, None)[0], c
-            else:
-                local = c          # moment mode: already in section time
-            log(f"Cutting Short {i} of {len(picks)}")
-            render.render(section, local, out, credit, s["layout"], log)
-            if prov.owns_sections():
-                section.unlink(missing_ok=True)
-            start_abs = local["start"] + sec_start
-            f = _fields(job, c)
-            prev = posted.get(f"{start_abs:.1f}") or {}
-            job["clips"].append({
-                "file": out.name, "start": start_abs, "end": local["end"] + sec_start,
-                "score": round(c.get("score", 0), 2), "hook": c["hook"], "why": c.get("why", ""),
-                "title": fill(s["title_template"], f)[:100], "description": fill(s["description_template"], f),
-                "youtube_id": prev.get("youtube_id"), "privacy": prev.get("privacy"),
-            })
-            if prev:
-                log(f"Short {i} is already on YouTube from the earlier run, so it won't be posted again")
-            _save(job)
+        # Downloading a clip's video is the slowest step left, so fetch a few at once and render
+        # each one as soon as its video is in.
+        pad, fetches = 2.0, {}
+        pool = ThreadPoolExecutor(FETCH_AHEAD) if prov.owns_sections() else None
+        if pool:
+            todo = [(i, c) for i, (c, section, _) in enumerate(picks, 1) if section is None]
+            if todo:
+                log(f"Fetching video for {len(todo)} Short{'s' if len(todo) != 1 else ''}, {FETCH_AHEAD} at a time")
+            for i, c in todo:
+                fetches[i] = pool.submit(prov.section, max(0.0, c["start"] - pad), c["end"] + pad,
+                                         work / f"section_{i:02d}")
+        try:
+            _cut_all(job, picks, fetches, prov, posted, credit, s, work, log, check)
+        finally:
+            if pool:
+                pool.shutdown(wait=False, cancel_futures=True)
 
         if job["upload"]:
             _upload_all(job, s, work, log, check, stage)
@@ -323,6 +322,56 @@ def _run(job_id: str):
         if work.exists():
             (work / "error.txt").write_text(traceback.format_exc())
         stage("failed", msg)
+
+
+def _cut_all(job, picks, fetches, prov, posted, credit, s, work, log, check):
+    for i, (c, section, sec_start) in enumerate(picks, 1):
+        check()
+        out = work / f"short_{i:02d}.mp4"
+        if i in fetches:
+            try:
+                section, sec_start = fetches[i].result()
+            except Cancelled:
+                raise
+            except Exception as e:
+                # Parallel downloads occasionally trip on a flaky connection; one calm retry
+                # on its own usually gets it.
+                check()
+                log(f"Video for Short {i} didn't download ({str(e).strip()[:80]}), trying again")
+                pad = 2.0
+                section, sec_start = prov.section(max(0.0, c["start"] - pad), c["end"] + pad,
+                                                  work / f"section_{i:02d}")
+            local = dict(c, start=c["start"] - sec_start, end=c["end"] - sec_start,
+                         words=[dict(w, s=w["s"] - sec_start, e=w["e"] - sec_start) for w in c.get("words", [])])
+        elif section is None:
+            section, local = prov.section(0, 0, None)[0], c
+        else:
+            local = c          # moment mode: already in section time
+        if c.get("from_captions"):
+            # The platform's captions found the moment; Whisper writes the burned-in captions,
+            # which are more accurate and have punctuation.
+            try:
+                log(f"Transcribing Short {i} for its captions")
+                local = dict(local, words=analyze.words_in(section, local["start"], local["end"], s)
+                             or local.get("words", []))
+            except Exception as e:
+                log(f"Whisper didn't run ({e}), using YouTube's captions")
+        log(f"Cutting Short {i} of {len(picks)}")
+        render.render(section, local, out, credit, s["layout"], log)
+        if prov.owns_sections():
+            section.unlink(missing_ok=True)
+        start_abs = local["start"] + sec_start
+        f = _fields(job, c)
+        prev = posted.get(f"{start_abs:.1f}") or {}
+        job["clips"].append({
+            "file": out.name, "start": start_abs, "end": local["end"] + sec_start,
+            "score": round(c.get("score", 0), 2), "hook": c["hook"], "why": c.get("why", ""),
+            "title": fill(s["title_template"], f)[:100], "description": fill(s["description_template"], f),
+            "youtube_id": prev.get("youtube_id"), "privacy": prev.get("privacy"),
+        })
+        if prev:
+            log(f"Short {i} is already on YouTube from the earlier run, so it won't be posted again")
+        _save(job)
 
 
 def _friendly(e: Exception, msg: str) -> str:

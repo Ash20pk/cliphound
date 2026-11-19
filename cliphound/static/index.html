@@ -306,7 +306,7 @@
         <input id="link" type="text" aria-label="Stream or VOD link" inputmode="url" placeholder="YouTube, Twitch or Kick link, live or finished">
         <button class="primary" id="go" type="submit" disabled>Make 5 Shorts</button>
       </div>
-      <p class="hint" id="hint">Live YouTube streams work too, the whole broadcast so far gets scanned. Add a time like ?t=1h2m3s to clip one moment.</p>
+      <p class="hint" id="hint">Finished YouTube streams are read from their transcript in seconds. Live streams work too. Add a time like ?t=1h2m3s to clip one moment.</p>
       <p class="err" id="linkErr" hidden></p>
 
       <div class="preview" id="preview" hidden>
@@ -405,6 +405,11 @@
             <div><label class="f" for="d_category">YouTube category</label><select id="d_category" data-k="category_id">
               <option value="20">Gaming</option><option value="24">Entertainment</option><option value="23">Comedy</option><option value="22">People &amp; Blogs</option><option value="17">Sports</option></select></div>
           </div>
+          <hr class="divider">
+          <label class="switch"><input type="checkbox" id="d_transcript" data-k="use_transcript"> Use YouTube's transcript when there is one</label>
+          <p class="help">Finds the moments from the stream's captions in seconds, without downloading the audio. Live streams, Twitch and Kick always use the audio.</p>
+          <label class="switch" style="margin-top:8px"><input type="checkbox" id="d_chat" data-k="read_chat"> Read the chat replay</label>
+          <p class="help">Chat spikes help find moments when the audio is scanned, but the replay takes several minutes to download on a long YouTube stream.</p>
           <hr class="divider">
           <label class="switch"><input type="checkbox" id="d_upload" data-k="auto_upload"> Post automatically when a link finishes</label>
           <p class="help">Only for streamers whose permission is turned on under Streamers. Everyone else's Shorts wait for you to press Post.</p>
@@ -795,7 +800,7 @@ function stripSVG(j) {
   return `<div class="strip"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Loudness across the stream, with the clipped moments marked">
     <defs><pattern id="mute" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2" height="6" fill="var(--edge)"/></pattern></defs>
     ${bars}${marks}${at}</svg>
-    <div class="axis"><span>0:00</span><span>${muted ? 'Hatched parts were muted by the platform' : ''}</span><span>${hms(L)}</span></div></div>`;
+    <div class="axis"><span>0:00</span><span>${muted ? 'Hatched parts were muted by the platform' : j.picked_by === 'transcript' ? 'How much was said across the stream' : ''}</span><span>${hms(L)}</span></div></div>`;
 }
 
 function headHTML(j) {
@@ -803,7 +808,8 @@ function headHTML(j) {
   const idx = STAGES.indexOf(j.status), done = j.status === 'done';
   const steps = STAGES.map((s, i) => `<i class="${done || i < idx ? 'done' : i === idx ? 'now' : ''}"></i>`).join('');
   const tags = (m.kind === 'live' ? '<span class="tag live"><span class="dot live"></span>Live</span>' : '')
-    + (j.ai ? '<span class="tag ai">AI picked</span>' : '');
+    + (j.ai ? '<span class="tag ai">AI picked</span>' : '')
+    + (j.picked_by === 'transcript' ? '<span class="tag" style="color:var(--lilac)">From transcript</span>' : '');
   const actions = running(j.status)
     ? `<button class="btn small" data-act="cancel" data-id="${j.id}">Cancel</button>`
     : `<button class="btn small" data-act="retry" data-id="${j.id}">Run again</button><button class="btn small quiet danger" data-act="delete" data-id="${j.id}">Delete</button>`;
@@ -903,7 +909,7 @@ async function loadJobs() {
     }
     prev = el;
     const old = seen.get(j.id) || {};
-    const sig = { head: JSON.stringify([j.status, j.detail, j.meta && j.meta.title, j.ai]),
+    const sig = { head: JSON.stringify([j.status, j.detail, j.meta && j.meta.title, j.ai, j.picked_by]),
                   strip: JSON.stringify([j.stream_length, (j.waveform || []).length, j.clips.map(c => [c.start, c.end])]),
                   log: j.log.length };
     if (sig.head !== old.head) el.querySelector('.h').innerHTML = headHTML(j);

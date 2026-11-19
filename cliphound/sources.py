@@ -114,6 +114,10 @@ class Local:
     def __init__(self, meta, workdir, log, check):
         self.path = Path(meta["url"])
         self.duration = meta["duration"]
+        self.chat = None
+
+    def transcript(self):
+        return None
 
     def audio(self) -> Path:
         return self.path
@@ -126,12 +130,32 @@ class Local:
 
 
 class Vod:
+    read_chat = False
+
     def __init__(self, meta, workdir, log, check):
         self.url, self.workdir, self.log, self.check = meta["url"], workdir, log, check
         self.duration = meta.get("duration")
+        self.platform = meta.get("platform")
+        self.chat = None
+
+    def transcript(self) -> list[dict] | None:
+        """YouTube's own transcript when there is one: seconds instead of a full download."""
+        if self.platform != "YouTube":
+            return None
+        try:
+            return download.fetch_transcript(self.url, self.log)
+        except Exception as e:
+            self.log(f"Couldn't get YouTube's transcript ({e}), scanning the audio instead")
+            return None
 
     def audio(self) -> Path:
-        path, self.chat = download.fetch_audio(self.url, self.workdir, self.log)
+        path = download.fetch_audio(self.url, self.workdir, self.log)
+        if self.read_chat:
+            self.check()
+            try:
+                self.chat = download.fetch_chat(self.url, self.log)
+            except Exception as e:
+                self.log(f"Couldn't get the chat replay ({e}), scoring on audio and speech")
         return path
 
     def section(self, start, end, out) -> tuple[Path, float]:
@@ -148,6 +172,9 @@ class Live:
         self.duration = self.stream.duration
         self.workdir = workdir
         self.chat = None
+
+    def transcript(self):
+        return None   # live streams have no transcript until they end
 
     def audio(self) -> Path:
         return self.stream.fetch_audio(self.workdir / "audio_live.mp4")

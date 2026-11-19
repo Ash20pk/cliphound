@@ -25,7 +25,9 @@ DEFAULTS = {
     "auto_upload": False,        # only ever for streamers with permission recorded
     "privacy": "public",         # private | unlisted | public
     "category_id": "20",         # YouTube category: 20 Gaming, 24 Entertainment, 23 Comedy, 22 People & Blogs, 17 Sports
-    "cache_days": 7,             # downloaded stream audio is kept this long for re-clipping
+    "cache_days": 7,
+    "use_transcript": True,      # use the platform's transcript when it has one (no audio download)
+    "read_chat": False,          # chat replay helps picking but takes minutes on long YouTube streams             # downloaded stream audio is kept this long for re-clipping
     "whisper_model": "mlx-community/whisper-large-v3-turbo",
     # AI mode: a language model picks and titles the moments. ai_auth: "key" | "chatgpt" | None (whichever is set up)
     "ai_mode": True,
