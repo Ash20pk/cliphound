@@ -1,0 +1,987 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cliphound</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anybody:wdth,wght@50..150,400..900&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    --night: #1B1530;      /* page */
+    --wall: #251C40;       /* raised surfaces */
+    --wall-2: #30264F;     /* hover / inputs */
+    --edge: #3D3263;       /* borders */
+    --sand: #F6E7CF;       /* text */
+    --lilac: #A99BC9;      /* secondary text, waveform */
+    --dim: #8C7FAE;        /* placeholders */
+    --street: #FF9F43;     /* primary action, clip marks */
+    --on-street: #2A1606;
+    --flamingo: #FF6FA1;   /* live */
+    --glass: #7FE3D0;      /* finished */
+    --error: #FF8A7A;
+    --display: "Anybody", "Arial Black", system-ui, sans-serif;
+    --text: "Figtree", system-ui, -apple-system, sans-serif;
+    --r-s: 8px; --r-m: 14px; --r-l: 20px; --r-phone: 20px;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--night); color: var(--sand); font: 16px/1.5 var(--text); min-height: 100vh; }
+  body.drawer-open { overflow: hidden; }
+  a { color: var(--glass); }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--street); outline-offset: 3px; border-radius: 4px; }
+  [hidden] { display: none !important; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 0 32px; }
+
+  /* Shared controls */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 36px; padding: 0 14px;
+         border-radius: var(--r-s); border: 1px solid var(--edge); background: transparent; cursor: pointer;
+         font-size: 14px; font-weight: 600; color: var(--sand); text-decoration: none; white-space: nowrap; }
+  .btn:hover { background: var(--wall-2); }
+  .btn.small { height: 30px; padding: 0 10px; font-size: 13px; }
+  .btn.quiet { border-color: transparent; color: var(--lilac); }
+  .s-actions .btn.small.quiet { padding: 0 5px; }
+  .btn.quiet:hover { color: var(--sand); }
+  .btn.danger:hover { color: var(--error); }
+  .primary { background: var(--street); color: var(--on-street); border: 0; border-radius: var(--r-s); padding: 0 24px;
+             font-weight: 700; font-size: 16px; cursor: pointer; white-space: nowrap; min-height: 52px; }
+  .primary:hover { filter: brightness(1.06); }
+  .primary:disabled { background: var(--wall-2); color: var(--dim); cursor: default; filter: none; }
+  .switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; min-height: 36px; user-select: none; }
+  .switch input { appearance: none; -webkit-appearance: none; margin: 0; flex: none; width: 38px; height: 22px; border-radius: 999px;
+                  background: var(--edge); position: relative; cursor: pointer; transition: background .15s; }
+  .switch input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%;
+                         background: var(--sand); transition: transform .15s; }
+  .switch input:checked { background: var(--street); }
+  .switch input:checked::after { transform: translateX(16px); background: var(--on-street); }
+  .switch input:disabled { opacity: .4; cursor: default; }
+  .switch:has(input:disabled) { cursor: default; color: var(--lilac); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--lilac); flex: none; }
+  .dot.on { background: var(--glass); } .dot.live { background: var(--flamingo); }
+  .err { color: var(--error); font-size: 14px; margin: 10px 2px 0; }
+
+  /* Top bar */
+  .bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 0; }
+  .mark { font-family: var(--display); font-weight: 800; font-variation-settings: "wdth" 150; font-size: 22px; line-height: 1; margin: 0;
+          display: flex; align-items: baseline; gap: 14px; }
+  .mark span { font-family: var(--text); font-variation-settings: normal; font-weight: 500; font-size: 14px; color: var(--lilac); }
+  .bar-actions { display: flex; gap: 8px; align-items: center; }
+  .chip { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: 999px;
+          border: 1px solid var(--edge); background: transparent; cursor: pointer; font-size: 14px; color: var(--sand); }
+  .chip:hover { background: var(--wall); }
+
+  /* Intake: the one big thing */
+  .intake { padding: 44px 0 36px; }
+  .intake h1 { font-family: var(--display); font-weight: 750; font-variation-settings: "wdth" 125;
+               font-size: clamp(30px, 4.4vw, 50px); line-height: 1.02; margin: 0 0 22px; }
+  .composer { background: var(--wall); border: 1px solid var(--edge); border-radius: var(--r-l); }
+  .field { display: flex; gap: 10px; padding: 10px; }
+  .field input { flex: 1; min-width: 0; background: var(--night); border: 1px solid var(--edge); border-radius: var(--r-m);
+                 outline: none; padding: 0 16px; height: 52px; font-size: 17px; transition: border-color .15s; }
+  .field input:focus { border-color: var(--lilac); }
+  .field input::placeholder { color: var(--dim); }
+  .hint { color: var(--lilac); font-size: 14px; margin: 0; padding: 0 18px 14px; }
+  .composer > .err { padding: 0 18px 14px; margin: 0; }
+
+  .preview { display: grid; grid-template-columns: 152px 1fr; gap: 16px; align-items: center; margin: 0 10px 10px; padding: 12px;
+             border-radius: var(--r-m); background: var(--night); }
+  .thumb { width: 152px; aspect-ratio: 16/9; border-radius: var(--r-s); object-fit: cover; background: var(--wall-2); display: block; }
+  .pv-channel { font-family: var(--display); font-variation-settings: "wdth" 130; font-weight: 700; font-size: 19px; line-height: 1.15; }
+  .pv-title { color: var(--lilac); font-size: 14px; margin-top: 3px; overflow: hidden; display: -webkit-box;
+              -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
+  .facts { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 8px; font-size: 14px; }
+  .fact { display: inline-flex; align-items: center; gap: 6px; }
+  .fact.live { color: var(--flamingo); font-weight: 600; }
+
+  .opts { display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: end; padding: 14px 18px 16px; border-top: 1px solid var(--edge); }
+  .opt .lbl { display: block; font-size: 13px; color: var(--lilac); margin-bottom: 6px; }
+  .opt .sub { display: block; font-size: 12px; color: var(--lilac); margin-top: 5px; min-height: 18px; }
+  .stepper { display: inline-flex; align-items: center; border: 1px solid var(--edge); border-radius: var(--r-s); background: var(--night); }
+  .stepper button { width: 36px; height: 36px; background: transparent; border: 0; cursor: pointer; font-size: 18px; color: var(--lilac); }
+  .stepper button:hover { color: var(--sand); }
+  .stepper input { width: 52px; height: 36px; text-align: center; font-weight: 700; background: transparent; border: 0; outline: none;
+                   -moz-appearance: textfield; }
+  .stepper input::-webkit-inner-spin-button, .stepper input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  .seg { display: inline-flex; border: 1px solid var(--edge); border-radius: var(--r-s); overflow: hidden; background: var(--night); }
+  .seg button { background: transparent; border: 0; padding: 0 13px; height: 36px; cursor: pointer; color: var(--lilac); }
+  .seg button + button { border-left: 1px solid var(--edge); }
+  .seg button[aria-pressed="true"] { background: var(--wall-2); color: var(--sand); font-weight: 700; }
+  .opt input.time { background: var(--night); border: 1px solid var(--edge); border-radius: var(--r-s); height: 36px; padding: 0 10px; width: 110px; }
+  .opt input.time::placeholder { color: var(--dim); }
+  .opt-switches { display: flex; flex-wrap: wrap; gap: 4px 22px; margin-left: auto; }
+  .notes { padding: 0 18px 14px; font-size: 13px; color: var(--lilac); display: flex; flex-direction: column; gap: 6px; }
+  .notes a { color: var(--lilac); }
+  .perm { display: flex; gap: 6px 16px; align-items: center; flex-wrap: wrap; color: var(--sand); background: rgba(255, 159, 67, .1);
+          border: 1px solid rgba(255, 159, 67, .35); border-radius: var(--r-s); padding: 8px 12px; font-size: 14px; }
+  .perm .switch { min-height: 28px; }
+
+  /* Journal */
+  .journal { padding: 12px 0 90px; }
+  .journal-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  .journal h2 { font-family: var(--display); font-weight: 700; font-variation-settings: "wdth" 120; font-size: 26px; margin: 0; }
+  .journal-head span { color: var(--lilac); font-size: 14px; }
+  #jobs { display: flex; flex-direction: column; gap: 18px; }
+  .empty { color: var(--lilac); border: 1px dashed var(--edge); border-radius: var(--r-l); padding: 40px; text-align: center; margin: 0; }
+  .entry { background: var(--wall); border: 1px solid var(--edge); border-radius: var(--r-l); padding: 22px 24px 18px; }
+  .entry-head { display: flex; justify-content: space-between; gap: 18px; align-items: start; }
+  .who { font-family: var(--display); font-variation-settings: "wdth" 140; font-weight: 800; font-size: 22px; line-height: 1.1;
+         display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+  .tag { display: inline-flex; align-items: center; gap: 6px; font-family: var(--text); font-size: 12px; font-weight: 700;
+         border: 1px solid currentColor; border-radius: 999px; padding: 1px 9px; line-height: 1.6; }
+  .tag.live { color: var(--flamingo); } .tag.ai { color: var(--glass); }
+  .what { color: var(--lilac); font-size: 14px; margin-top: 5px; max-width: 80ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .when { color: var(--lilac); font-size: 13px; white-space: nowrap; padding-top: 4px; }
+  .status { display: flex; align-items: center; gap: 8px 14px; margin-top: 14px; font-size: 14px; flex-wrap: wrap; }
+  .state { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; }
+  .state .dot { background: var(--street); }
+  .state.done .dot { background: var(--glass); } .state.failed .dot, .state.cancelled .dot { background: var(--error); }
+  .running .dot { animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .25; } }
+  .detail { color: var(--lilac); min-width: 0; }
+  .detail.failed { color: var(--error); }
+  .steps { display: flex; gap: 5px; }
+  .steps i { display: block; width: 24px; height: 4px; border-radius: 2px; background: var(--edge); }
+  .steps i.done { background: var(--lilac); } .steps i.now { background: var(--street); }
+  .actions { display: flex; gap: 4px; margin-left: auto; }
+
+  /* The stream strip: the whole broadcast at a glance */
+  .strip { position: relative; margin-top: 18px; }
+  .strip svg { width: 100%; height: 48px; display: block; overflow: visible; }
+  .strip-wait { margin-top: 18px; height: 48px; border-radius: var(--r-s); border: 1px dashed var(--edge);
+                display: flex; align-items: center; padding: 0 16px; color: var(--lilac); font-size: 14px; }
+  .strip .axis { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--lilac); margin-top: 6px; }
+  .mark-rect { fill: var(--street); opacity: .85; cursor: pointer; }
+  .mark-rect.hot { opacity: 1; }
+
+  .shorts { display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 22px 18px; margin-top: 20px; }
+  .short { min-width: 0; display: flex; flex-direction: column; }
+  .phone { position: relative; aspect-ratio: 9/16; border-radius: var(--r-phone); overflow: hidden; background: #000;
+           outline: 3px solid transparent; outline-offset: 2px; transition: outline-color .15s; }
+  .short.hot .phone { outline-color: var(--street); }
+  .phone video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .phone .num { position: absolute; top: 10px; left: 10px; background: rgba(27, 21, 48, .8); color: var(--sand); font-size: 12px;
+                font-weight: 700; border-radius: 999px; padding: 1px 8px; pointer-events: none; }
+  .short.fresh .phone { animation: develop 1.2s ease-out both; }
+  @keyframes develop { from { filter: sepia(1) brightness(1.6) contrast(.6); } to { filter: none; } }
+  .s-title { font-weight: 700; font-size: 15px; line-height: 1.3; margin-top: 12px; overflow-wrap: anywhere;
+             display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .s-why { color: var(--lilac); font-size: 13px; margin-top: 4px; line-height: 1.35;
+           display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .s-time { color: var(--lilac); font-size: 13px; margin-top: 6px; }
+  .s-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; padding-top: 10px; }
+  .btn.post { background: var(--street); color: var(--on-street); border-color: var(--street); }
+  .btn.post:hover { filter: brightness(1.06); background: var(--street); }
+  .btn.post:disabled { background: var(--wall-2); color: var(--lilac); border-color: var(--edge); cursor: default; filter: none; }
+  .running-dot { background: var(--street); animation: pulse 1.4s ease-in-out infinite; }
+  .s-err { color: var(--error); font-size: 13px; margin-top: 4px; }
+  .yt-state.locked { color: var(--lilac); }
+  a.yt-state { text-decoration: none; }
+  .editor { margin-top: 10px; }
+  .editor textarea { min-height: 110px; font-size: 13px; }
+  .editor .f { margin-top: 10px; }
+  .yt-state { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--glass); }
+  details.log { margin-top: 14px; }
+  details.log summary { cursor: pointer; color: var(--lilac); font-size: 13px; width: max-content; }
+  details.log summary:hover { color: var(--sand); }
+  details.log pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12.5px; line-height: 1.5; color: var(--lilac);
+                    background: var(--night); border-radius: var(--r-s); padding: 12px 14px; max-height: 260px; overflow: auto; }
+
+  /* Settings sheet */
+  .scrim { position: fixed; inset: 0; background: rgba(10, 6, 22, .65); opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 5; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(900px, 100vw); background: var(--night); z-index: 6;
+            border-left: 1px solid var(--edge); transform: translateX(100%); transition: transform .25s ease;
+            display: grid; grid-template-rows: auto 1fr; visibility: hidden; }
+  body.drawer-open .scrim { opacity: 1; pointer-events: auto; }
+  body.drawer-open .drawer { transform: none; visibility: visible; }
+  .drawer-top { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 18px 28px;
+                border-bottom: 1px solid var(--edge); }
+  .drawer-top h2 { font-family: var(--display); font-variation-settings: "wdth" 130; font-weight: 800; font-size: 24px; margin: 0; }
+  .save-state { color: var(--lilac); font-size: 13px; margin-right: auto; margin-left: 6px; }
+  .save-state.ok { color: var(--glass); } .save-state.bad { color: var(--error); }
+  .close { background: none; border: 1px solid var(--edge); width: 36px; height: 36px; border-radius: 50%; font-size: 20px;
+           line-height: 1; cursor: pointer; color: var(--lilac); }
+  .close:hover { color: var(--sand); background: var(--wall); }
+  .drawer-body { display: grid; grid-template-columns: 190px 1fr; min-height: 0; }
+  .snav { padding: 20px 12px; border-right: 1px solid var(--edge); display: flex; flex-direction: column; gap: 2px; }
+  .snav a { color: var(--lilac); text-decoration: none; padding: 8px 12px; border-radius: var(--r-s); font-size: 15px; font-weight: 500; }
+  .snav a:hover { color: var(--sand); background: var(--wall); }
+  .snav a.on { color: var(--sand); background: var(--wall); font-weight: 700; }
+  .spane { position: relative; overflow-y: auto; padding: 8px 32px 80px; scroll-behavior: smooth; }
+  .sgroup { padding: 26px 0 30px; border-bottom: 1px solid var(--edge); scroll-margin-top: 8px; }
+  .sgroup:last-child { border-bottom: 0; }
+  .sgroup > h3 { font-family: var(--display); font-variation-settings: "wdth" 120; font-weight: 700; font-size: 19px; margin: 0 0 4px; }
+  .sgroup > p.lead { color: var(--lilac); font-size: 14px; margin: 0 0 16px; max-width: 62ch; }
+  .card { background: var(--wall); border: 1px solid var(--edge); border-radius: var(--r-m); padding: 16px 18px; }
+  .sgroup > * + *, #aiBox > * + *, #ytBox > * + * { margin-top: 12px; }
+  .card p { color: var(--lilac); font-size: 14px; margin: 6px 0 0; }
+  .card strong { color: var(--sand); }
+  .card-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .card-row .grow { flex: 1; min-width: 200px; }
+  .card h4 { margin: 0; font-size: 15px; }
+  .form label.f { display: block; font-size: 13px; font-weight: 600; color: var(--lilac); margin: 16px 0 6px; }
+  .form label.f:first-child { margin-top: 0; }
+  .form .help { font-size: 13px; color: var(--lilac); margin: 6px 0 0; }
+  .form input[type=text], .form input[type=number], .form input[type=password], .form select, .form textarea {
+    width: 100%; background: var(--night); border: 1px solid var(--edge); border-radius: var(--r-s); padding: 9px 12px; outline: none; }
+  .form input:focus, .form select:focus, .form textarea:focus { border-color: var(--lilac); }
+  .form input::placeholder, .form textarea::placeholder { color: var(--dim); }
+  .form textarea { min-height: 120px; font-size: 14px; resize: vertical; line-height: 1.5; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+  .divider { border: 0; border-top: 1px solid var(--edge); margin: 16px 0; }
+  .vars { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .vars code { font-size: 12.5px; background: var(--wall-2); border-radius: 6px; padding: 2px 7px; color: var(--sand); }
+  .streamer { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 0; font-size: 15px; }
+  .streamer + .streamer { border-top: 1px solid var(--edge); }
+  .streamer small { display: block; color: var(--lilac); font-size: 13px; }
+  .streamer small a { color: var(--lilac); }
+  ol.steps-list { color: var(--lilac); font-size: 14px; padding-left: 20px; margin: 8px 0 14px; }
+  ol.steps-list li { margin: 4px 0; }
+  .avatar { width: 44px; height: 44px; border-radius: 50%; flex: none; background: var(--wall-2); display: grid; place-items: center; font-weight: 700; }
+  .chatgpt-btn { display: inline-flex; align-items: center; gap: 10px; background: var(--sand); color: #16121F; border: 0;
+                 border-radius: 999px; height: 40px; padding: 0 18px; font-weight: 600; cursor: pointer; text-decoration: none; }
+  .chatgpt-btn svg { width: 18px; height: 18px; }
+  .google-btn { display: inline-flex; align-items: center; gap: 10px; background: #fff; color: #1F1F1F; border: 1px solid #747775;
+                border-radius: 999px; height: 40px; padding: 0 16px; font: 500 15px/1 Roboto, var(--text); text-decoration: none; }
+  .google-btn svg { width: 18px; height: 18px; }
+  .keyrow { display: flex; gap: 8px; }
+  .keyrow input { flex: 1; min-width: 0; }
+
+  .modal { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(10, 6, 22, .7); padding: 16px; z-index: 10; }
+  .modal-card { background: var(--wall); border: 1px solid var(--edge); border-radius: var(--r-m); padding: 26px; max-width: 440px; }
+  .modal-card h2 { font-family: var(--display); font-variation-settings: "wdth" 120; font-size: 22px; margin: 0 0 10px; }
+  .modal-card p { color: var(--lilac); margin: 0 0 12px; font-size: 15px; }
+  .modal-card .primary { min-height: 42px; margin-top: 6px; }
+
+  @media (max-width: 860px) {
+    .opt-switches { margin-left: 0; width: 100%; }
+  }
+  @media (max-width: 720px) {
+    .wrap { padding: 0 16px; }
+    .mark span { display: none; }
+    .chip .chip-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .chip { padding: 0 13px; }
+    .intake { padding: 24px 0 28px; }
+    .field { flex-direction: column; }
+    .field input { flex: none; }
+    .opt .sub:empty { display: none; }
+    .primary { width: 100%; }
+    .preview { grid-template-columns: 96px 1fr; gap: 12px; }
+    .thumb { width: 96px; }
+    .opts { padding: 14px; gap: 14px 18px; }
+    .entry { padding: 18px 16px 14px; }
+    .entry-head { flex-direction: column; gap: 4px; }
+    .what { white-space: normal; }
+    .actions { margin-left: 0; width: 100%; }
+    .shorts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 12px; }
+    .drawer-top { padding: 14px 16px; }
+    .drawer-body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+    .snav { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--edge); padding: 8px 12px; }
+    .snav a { white-space: nowrap; font-size: 14px; }
+    .spane { padding: 0 16px 60px; }
+    .row2 { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="bar">
+    <p class="mark">Cliphound<span>Long streams in, Shorts out</span></p>
+    <div class="bar-actions">
+      <button class="chip" id="aiChip" type="button" data-go="s-ai"><span class="dot" id="aiDot"></span><span class="chip-text" id="aiText">AI picking</span></button>
+      <button class="chip" id="ytChip" type="button" data-go="s-yt"><span class="dot" id="ytDot"></span><span class="chip-text" id="ytText">YouTube</span></button>
+      <button class="chip" id="openSettings" type="button" data-go="s-ai">Settings</button>
+    </div>
+  </header>
+
+  <section class="intake" aria-labelledby="intakeTitle">
+    <h1 id="intakeTitle">Paste a stream, get Shorts</h1>
+    <form class="composer" id="linkForm" autocomplete="off">
+      <div class="field">
+        <input id="link" type="text" aria-label="Stream or VOD link" inputmode="url" placeholder="YouTube, Twitch or Kick link, live or finished">
+        <button class="primary" id="go" type="submit" disabled>Make 5 Shorts</button>
+      </div>
+      <p class="hint" id="hint">Live YouTube streams work too, the whole broadcast so far gets scanned. Add a time like ?t=1h2m3s to clip one moment.</p>
+      <p class="err" id="linkErr" hidden></p>
+
+      <div class="preview" id="preview" hidden>
+        <img class="thumb" id="pvThumb" alt="">
+        <div>
+          <div class="pv-channel" id="pvChannel"></div>
+          <div class="pv-title" id="pvTitle"></div>
+          <div class="facts" id="pvFacts"></div>
+        </div>
+      </div>
+
+      <div class="opts">
+        <div class="opt" id="optCount">
+          <span class="lbl" id="countLbl">Shorts</span>
+          <div class="stepper"><button type="button" id="minus" aria-label="Fewer Shorts">−</button><input id="count" type="number" min="1" inputmode="numeric" aria-labelledby="countLbl" value="5"><button type="button" id="plus" aria-label="More Shorts">+</button></div>
+          <span class="sub" id="countSub"></span>
+        </div>
+        <div class="opt">
+          <span class="lbl">Length</span>
+          <div class="seg" id="lengthSeg" role="group" aria-label="Short length">
+            <button type="button" data-len="20">20s</button><button type="button" data-len="30">30s</button><button type="button" data-len="45">45s</button><button type="button" data-len="58">58s</button>
+          </div>
+          <span class="sub"></span>
+        </div>
+        <div class="opt">
+          <label class="lbl" for="at">One moment at</label>
+          <input type="text" class="time" id="at" placeholder="1:02:03">
+          <span class="sub"></span>
+        </div>
+        <div class="opt opt-switches">
+          <label class="switch"><input type="checkbox" id="useAI"> AI picks the moments</label>
+          <label class="switch"><input type="checkbox" id="upload"> <span id="uploadLabel">Upload to YouTube</span></label>
+        </div>
+      </div>
+      <div class="notes" id="notes">
+        <span id="aiNote"></span>
+        <div class="perm" id="perm" hidden>
+          <span><strong>No permission recorded</strong> for this streamer, so nothing posts automatically. Posting their clips without it can get copyright strikes.</span>
+          <label class="switch"><input type="checkbox" id="permBox"> I have their permission</label>
+        </div>
+      </div>
+    </form>
+  </section>
+
+  <section class="journal" aria-labelledby="journalTitle">
+    <div class="journal-head"><h2 id="journalTitle">Your Shorts</h2><span id="journalCount"></span></div>
+    <div id="jobs"><p class="empty">Nothing clipped yet. Paste a link above and your Shorts land here.</p></div>
+  </section>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-label="Settings" aria-hidden="true">
+  <div class="drawer-top"><h2>Settings</h2><span class="save-state" id="saveState" aria-live="polite"></span><button class="close" id="closeSettings" aria-label="Close settings">×</button></div>
+  <div class="drawer-body">
+    <nav class="snav" id="snav" aria-label="Settings sections">
+      <a href="#s-ai" data-s="s-ai">AI picking</a>
+      <a href="#s-yt" data-s="s-yt">YouTube</a>
+      <a href="#s-new" data-s="s-new">New links</a>
+      <a href="#s-text" data-s="s-text">Titles and text</a>
+      <a href="#s-src" data-s="s-src">Streamers</a>
+      <a href="#s-disk" data-s="s-disk">Storage</a>
+    </nav>
+    <div class="spane" id="spane">
+      <section class="sgroup" id="s-ai">
+        <h3>AI picking</h3>
+        <p class="lead">A language model reads what was said at the loudest moments, picks the best ones, trims them and writes the titles. Without it, Cliphound ranks moments by loudness and hype words.</p>
+        <div class="card">
+          <label class="switch"><input type="checkbox" id="aiMode" data-k="ai_mode"> Use AI picking for new links</label>
+        </div>
+        <div id="aiBox"></div>
+        <div class="card form">
+          <label class="f" for="brief">What your channel is about</label>
+          <textarea id="brief" data-k="channel_brief" style="min-height:84px" placeholder="e.g. Funny moments and big plays from GTA 6 streams"></textarea>
+          <p class="help">The AI uses this to decide which moments fit your channel.</p>
+          <label class="f" for="titleLang">Write titles in</label>
+          <input type="text" id="titleLang" data-k="title_language" placeholder="English">
+        </div>
+      </section>
+
+      <section class="sgroup" id="s-yt">
+        <h3>YouTube</h3>
+        <p class="lead">Sign in once and finished Shorts upload to your channel on their own.</p>
+        <div id="ytBox"></div>
+      </section>
+
+      <section class="sgroup" id="s-new">
+        <h3>New links</h3>
+        <p class="lead">What a pasted link starts with. You can still change the count, length and upload for each link.</p>
+        <div class="card form">
+          <div class="row2">
+            <div><label class="f" for="d_clips">Shorts per link</label><input type="number" id="d_clips" data-k="clips_per_vod" data-num min="1"></div>
+            <div><label class="f" for="d_len">Target length in seconds</label><input type="number" id="d_len" data-k="clip_seconds" data-num min="10" max="58"></div>
+          </div>
+          <div class="row2">
+            <div><label class="f" for="d_layout">Layout</label><select id="d_layout" data-k="layout"><option value="fit">Full frame on a blurred fill</option><option value="crop">Centre crop</option></select></div>
+            <div><label class="f" for="d_category">YouTube category</label><select id="d_category" data-k="category_id">
+              <option value="20">Gaming</option><option value="24">Entertainment</option><option value="23">Comedy</option><option value="22">People &amp; Blogs</option><option value="17">Sports</option></select></div>
+          </div>
+          <hr class="divider">
+          <label class="switch"><input type="checkbox" id="d_upload" data-k="auto_upload"> Post automatically when a link finishes</label>
+          <p class="help">Only for streamers whose permission is turned on under Streamers. Everyone else's Shorts wait for you to press Post.</p>
+          <label class="f" for="d_privacy">Automatic posts go up as</label>
+          <select id="d_privacy" data-k="privacy" style="max-width:280px"><option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option></select>
+          <p class="help">The Post button always posts publicly. YouTube keeps uploads private anyway until Google audits your Cloud project.</p>
+        </div>
+      </section>
+
+      <section class="sgroup" id="s-text">
+        <h3>Titles and text</h3>
+        <p class="lead">Used for every upload. These fill in for each Short:</p>
+        <div class="card form">
+          <div class="vars" style="margin:0 0 4px"><code>{hook}</code><code>{streamer}</code><code>{credit_url}</code></div>
+          <p class="help" style="margin-bottom:6px">The best line from the clip, the streamer's name, and a link to their channel.</p>
+          <label class="f" for="t_title">Title</label><input type="text" id="t_title" data-k="title_template">
+          <label class="f" for="t_desc">Description</label><textarea id="t_desc" data-k="description_template"></textarea>
+          <label class="f" for="t_tags">Tags, separated by commas</label><input type="text" id="t_tags" data-k="tags">
+        </div>
+      </section>
+
+      <section class="sgroup" id="s-src">
+        <h3>Streamers</h3>
+        <p class="lead">Added the first time you paste one of their links. Turn on permission once a streamer has said yes to clipping.</p>
+        <div class="card" id="streamers"></div>
+      </section>
+
+      <section class="sgroup" id="s-disk">
+        <h3>Storage</h3>
+        <p class="lead">Cliphound keeps each stream's audio for 7 days so you can clip it again without re-downloading. Older audio is cleared when the app starts.</p>
+        <div class="card card-row"><div class="grow"><h4>Stream audio</h4><p style="margin-top:2px" id="cacheSize">Checking</p></div>
+          <button class="btn small" id="clearCache" type="button">Clear now</button></div>
+        <div class="card"><h4>Your Shorts</h4><p style="margin-top:2px" id="jobsSize">Checking</p><p>Delete a stream's entry, or Remove single Shorts, to free this space.</p></div>
+      </section>
+    </div>
+  </div>
+</aside>
+
+<div class="modal" id="planModal" hidden role="dialog" aria-modal="true" aria-labelledby="planTitle">
+  <div class="modal-card">
+    <h2 id="planTitle">You're using your ChatGPT plan</h2>
+    <p>When AI picking is on, choosing moments and writing titles counts against your ChatGPT plan's usage. That's separate from OpenAI API billing, and you can cap it any time.</p>
+    <p><a href="https://chatgpt.com/settings/usage" target="_blank" rel="noopener">Manage usage</a></p>
+    <button class="primary" id="planOk" type="button">Got it</button>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function api(path, opts = {}) {
+  const r = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(typeof body.detail === 'string' ? body.detail : 'Something went wrong (' + r.status + ')');
+  return body;
+}
+const hms = t => { if (t == null) return ''; t = Math.max(0, Math.floor(t)); const h = Math.floor(t/3600), m = Math.floor(t%3600/60), s = t%60;
+  return (h ? h + ':' + String(m).padStart(2,'0') : m) + ':' + String(s).padStart(2,'0'); };
+const hours = t => t >= 3600 ? (t/3600).toFixed(t >= 36000 ? 0 : 1) + ' h' : Math.round(t/60) + ' min';
+const compact = n => n == null ? '' : n >= 1e6 ? (n/1e6).toFixed(1).replace('.0','') + 'M' : n >= 1e3 ? Math.round(n/1e3) + 'K' : String(n);
+const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+
+let settings = null, yt = { connected: false }, meta = null, count = 5, length = 30, aiSt = null;
+const OPENAI_MARK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M22.3 9.8a5.9 5.9 0 0 0-.5-4.9 6 6 0 0 0-6.5-2.9A6 6 0 0 0 4.9 4.2a5.9 5.9 0 0 0-4 2.9 6 6 0 0 0 .8 7 5.9 5.9 0 0 0 .5 4.9 6 6 0 0 0 6.5 2.9 5.9 5.9 0 0 0 4.4 2 6 6 0 0 0 5.7-4.2 5.9 5.9 0 0 0 4-2.9 6 6 0 0 0-.7-7Zm-9 12.6a4.4 4.4 0 0 1-2.8-1l.1-.1 4.7-2.7a.8.8 0 0 0 .4-.7v-6.6l2 1.1v5.5a4.5 4.5 0 0 1-4.4 4.5ZM3.8 18.3a4.4 4.4 0 0 1-.5-3l.1.1 4.7 2.7a.8.8 0 0 0 .8 0l5.7-3.3v2.3l-4.8 2.8a4.5 4.5 0 0 1-6-1.6ZM2.6 8.2a4.4 4.4 0 0 1 2.3-2V12a.8.8 0 0 0 .4.7l5.7 3.3-2 1.1-4.7-2.7a4.5 4.5 0 0 1-1.7-6.2Zm16.4 3.8-5.7-3.3 2-1.1 4.7 2.7a4.4 4.4 0 0 1-.7 8.1v-5.6a.8.8 0 0 0-.3-.8Zm2-3-.1-.1-4.7-2.7a.8.8 0 0 0-.8 0L9.7 9.5V7.2l4.8-2.8a4.5 4.5 0 0 1 6.6 4.6ZM8.3 12.9l-2-1.1V6.2a4.5 4.5 0 0 1 7.3-3.4l-.1.1-4.7 2.7a.8.8 0 0 0-.4.7v6.6Zm1.1-2.4 2.6-1.5 2.6 1.5v3l-2.6 1.5-2.6-1.5v-3Z"/></svg>';
+const G_MARK = '<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.2C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.6c0-1.6-.1-3.1-.4-4.6H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.8c4.3-4 6.9-9.9 6.9-17.1z"/><path fill="#FBBC05" d="M10.5 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.2C1 16.5 0 20.1 0 24s1 7.5 2.7 10.8l7.8-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.8c-2.1 1.4-4.8 2.3-8.5 2.3-6.2 0-11.5-4.1-13.4-9.8l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>';
+
+/* ---------- settings: everything saves as you type ---------- */
+let saveTimer = null, pending = {};
+function saveState(text, cls = '') { const el = $('saveState'); el.textContent = text; el.className = 'save-state ' + cls; }
+function fieldValue(el) {
+  const k = el.dataset.k;
+  if (el.type === 'checkbox') return el.checked;
+  if ('num' in el.dataset) { const n = parseInt(el.value, 10); return Number.isFinite(n) ? n : null; }
+  if (k === 'tags') return el.value.split(',').map(t => t.trim()).filter(Boolean);
+  if (k === 'title_language') return el.value.trim() || 'English';
+  return el.value;
+}
+async function flush() {
+  clearTimeout(saveTimer);
+  const body = pending; pending = {};
+  for (const k of Object.keys(body)) if (body[k] === null) delete body[k];
+  if (!Object.keys(body).length) return;
+  saveState('Saving');
+  try { settings = await api('/api/settings', { method: 'PUT', body: JSON.stringify(body) }); saveState('All changes saved', 'ok'); }
+  catch (e) { saveState(e.message, 'bad'); return; }
+  if ('ai_mode' in body) syncAI();
+  if ('auto_upload' in body) syncUpload();
+  if (!meta && ('clips_per_vod' in body || 'clip_seconds' in body)) { count = settings.clips_per_vod; length = settings.clip_seconds; syncOpts(); }
+}
+document.querySelectorAll('#drawer [data-k]').forEach(el => {
+  const queue = () => { pending[el.dataset.k] = fieldValue(el); saveState('Editing'); clearTimeout(saveTimer); saveTimer = setTimeout(flush, 600); };
+  el.addEventListener(el.type === 'checkbox' || el.tagName === 'SELECT' ? 'change' : 'input', queue);
+  if (el.type !== 'checkbox' && el.tagName !== 'SELECT') el.addEventListener('blur', () => { if (Object.keys(pending).length) flush(); });
+});
+// Checkboxes and selects save straight away.
+document.querySelectorAll('#drawer input[type=checkbox][data-k], #drawer select[data-k]').forEach(el => el.addEventListener('change', flush));
+
+async function loadSettings() {
+  settings = await api('/api/settings');
+  document.querySelectorAll('#drawer [data-k]').forEach(el => {
+    if (document.activeElement === el) return;
+    const v = settings[el.dataset.k];
+    if (el.type === 'checkbox') el.checked = !!v;
+    else if (Array.isArray(v)) el.value = v.join(', ');
+    else el.value = v ?? '';
+  });
+  $('streamers').innerHTML = settings.sources.length ? settings.sources.map(s => `
+    <div class="streamer"><div>${esc(s.name)}<small>${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url.replace(/^https?:\/\/(www\.)?/, ''))}</a>` : 'Local files'}</small></div>
+    <label class="switch"><input type="checkbox" data-perm="${esc(s.id)}" ${s.permission ? 'checked' : ''}> Permission</label></div>`).join('')
+    : '<p style="margin:0">No streamers yet.</p>';
+  if (!meta) { count = settings.clips_per_vod; length = settings.clip_seconds; syncOpts(); }
+}
+$('streamers').addEventListener('change', async e => {
+  const id = e.target.dataset.perm; if (!id) return;
+  await api('/api/sources/' + id, { method: 'PATCH', body: JSON.stringify({ permission: e.target.checked }) });
+  saveState('All changes saved', 'ok');
+  await loadSettings(); if (meta) refreshPerm();
+});
+
+/* ---------- AI ---------- */
+async function loadAI() {
+  try { aiSt = await api('/api/ai'); } catch { aiSt = { method: null, chatgpt: { signed_in: false } }; }
+  const c = aiSt.chatgpt || {};
+  let h = '';
+  if (c.signed_in) {
+    h += `<div class="card card-row"><div class="avatar" style="background:var(--sand);color:#16121F">${OPENAI_MARK}</div>
+      <div class="grow"><h4>Signed in with ChatGPT</h4><p style="margin-top:2px"><strong>${esc(c.email || c.name || 'Your account')}</strong>. Picks count against your ChatGPT plan. <a href="https://chatgpt.com/settings/usage" target="_blank" rel="noopener">Manage usage</a></p></div>
+      <button class="btn small" id="aiSignOut" type="button">Sign out</button></div>`;
+  } else {
+    h += `<div class="card card-row"><div class="grow"><h4>ChatGPT</h4><p style="margin-top:2px">Use your ChatGPT Plus or Pro plan. No API key needed.</p></div>
+      <a class="chatgpt-btn" href="/api/ai/chatgpt/start">${OPENAI_MARK}Sign in with ChatGPT</a></div>`;
+  }
+  if (aiSt.key_set) {
+    h += `<div class="card card-row"><div class="grow"><h4>OpenAI API key</h4><p style="margin-top:2px">Key <strong>${esc(aiSt.key_hint)}</strong> is saved on this computer. Requests are billed to your OpenAI API account.</p></div>
+      <button class="btn small danger" id="aiKeyRemove" type="button">Remove key</button></div>`;
+  } else {
+    h += `<div class="card form"><label class="f" for="aiKey">${c.signed_in ? 'Or use' : 'Or paste'} an OpenAI API key</label>
+      <div class="keyrow"><input type="password" id="aiKey" placeholder="sk-..." autocomplete="off"><button class="btn" id="aiKeySave" type="button" style="height:auto">Save key</button></div>
+      <p class="err" id="aiKeyErr" hidden></p></div>`;
+  }
+  if (aiSt.method) {
+    h += `<div class="card form"><div class="row2">`;
+    if (c.signed_in && aiSt.key_set) {
+      h += `<div><label class="f" for="aiAuth">Pay for AI picks with</label><select id="aiAuth">
+        <option value="chatgpt" ${aiSt.method === 'chatgpt' ? 'selected' : ''}>My ChatGPT plan</option>
+        <option value="key" ${aiSt.method === 'key' ? 'selected' : ''}>My API key</option></select></div>`;
+    }
+    const opts = (aiSt.models || []).map(m => `<option value="${esc(m)}" ${m === (settings.ai_model || aiSt.default_model) ? 'selected' : ''}>${esc(m)}${m === aiSt.default_model ? ' (default)' : ''}</option>`).join('');
+    h += aiSt.models_error ? `<div><p class="err">${esc(aiSt.models_error)}</p></div>`
+      : `<div><label class="f" for="aiModel">Model</label><select id="aiModel">${opts}</select></div>`;
+    h += `</div></div>`;
+  }
+  $('aiBox').innerHTML = h;
+  const on = (id, ev, fn) => { const el = $(id); if (el) el[ev] = fn; };
+  on('aiSignOut', 'onclick', async () => { await api('/api/ai/chatgpt/signout', { method: 'POST' }); await loadSettings(); loadAI(); });
+  on('aiKeyRemove', 'onclick', async () => { await api('/api/ai/key', { method: 'DELETE' }); loadAI(); });
+  on('aiKeySave', 'onclick', async () => {
+    $('aiKeySave').disabled = true; $('aiKeySave').textContent = 'Checking';
+    try { await api('/api/ai/key', { method: 'POST', body: JSON.stringify({ key: $('aiKey').value }) }); await loadSettings(); loadAI(); }
+    catch (e) { $('aiKeyErr').textContent = e.message; $('aiKeyErr').hidden = false; $('aiKeySave').disabled = false; $('aiKeySave').textContent = 'Save key'; }
+  });
+  on('aiAuth', 'onchange', async e => { await api('/api/settings', { method: 'PUT', body: JSON.stringify({ ai_auth: e.target.value, ai_model: null }) }); saveState('All changes saved', 'ok'); await loadSettings(); loadAI(); });
+  on('aiModel', 'onchange', async e => { await api('/api/settings', { method: 'PUT', body: JSON.stringify({ ai_model: e.target.value }) }); saveState('All changes saved', 'ok'); await loadSettings(); });
+  syncAI();
+  if (c.signed_in && !c.first_use_seen) $('planModal').hidden = false;
+}
+$('planOk').onclick = async () => { $('planModal').hidden = true; await api('/api/ai/chatgpt/seen', { method: 'POST' }); };
+function syncAI() {
+  if (!aiSt || !settings) return;
+  const box = $('useAI');
+  box.disabled = !aiSt.method;
+  box.checked = !!aiSt.method && settings.ai_mode;
+  const on = !!aiSt.method && settings.ai_mode;
+  $('aiDot').className = 'dot' + (on ? ' on' : '');
+  $('aiText').textContent = !aiSt.method ? 'AI not connected' : on ? (aiSt.method === 'chatgpt' ? 'AI with ChatGPT' : 'AI with API key') : 'AI off';
+  $('aiNote').innerHTML = !aiSt.method ? 'AI picking needs ChatGPT or an OpenAI key. <a href="#" data-go="s-ai">Connect one in Settings</a>'
+    : aiSt.method === 'chatgpt' ? 'AI picking uses your ChatGPT plan. <a href="https://chatgpt.com/settings/usage" target="_blank" rel="noopener">Manage usage</a>'
+    : 'AI picking uses your OpenAI API key.';
+}
+
+/* ---------- YouTube ---------- */
+async function loadYT() {
+  try { yt = await api('/api/youtube'); } catch { yt = { connected: false, reason: 'error' }; }
+  $('ytDot').className = 'dot' + (yt.connected ? ' on' : '');
+  $('ytText').textContent = yt.connected ? (yt.handle || yt.channel) : 'YouTube not connected';
+  if (yt.connected) {
+    const pic = yt.thumbnail ? `<img class="avatar" src="${esc(yt.thumbnail)}" alt="">` : `<div class="avatar">${esc((yt.channel || '?')[0])}</div>`;
+    $('ytBox').innerHTML = `<div class="card card-row">${pic}
+        <div class="grow"><h4>${esc(yt.channel)}</h4><p style="margin-top:2px">${yt.handle ? esc(yt.handle) + '. ' : ''}Finished Shorts upload here.</p></div>
+        <button class="btn small" id="ytSwitch" type="button">Switch channel</button>
+        <button class="btn small quiet danger" id="ytOut" type="button">Sign out</button></div>
+      <div class="card"><p style="margin:0">Until Google audits your Cloud project, YouTube keeps uploads made through its API private. Publish them from YouTube Studio.</p></div>`;
+    $('ytSwitch').onclick = () => { location.href = '/api/youtube/start'; };
+    $('ytOut').onclick = async () => { await api('/api/youtube/signout', { method: 'POST' }); loadYT(); };
+  } else if (yt.reason === 'no_client_secret') {
+    $('ytBox').innerHTML = `<div class="card"><h4>One-time setup</h4><p>Posting needs a Google OAuth client of your own.</p>
+      <ol class="steps-list"><li>In Google Cloud Console, create a project and enable the YouTube Data API v3.</li>
+      <li>Set up the OAuth consent screen, then create an OAuth client of type Desktop app and download its JSON file.</li>
+      <li>Add the file here, then sign in with Google.</li></ol>
+      <label class="btn">Add OAuth client file<input type="file" id="secret" accept=".json,application/json" hidden></label>
+      <p class="err" id="secretErr" hidden></p></div>`;
+    $('secret').onchange = async e => {
+      const fd = new FormData(); fd.append('file', e.target.files[0]);
+      const r = await fetch('/api/youtube/client-secret', { method: 'POST', body: fd });
+      if (!r.ok) { $('secretErr').textContent = (await r.json().catch(() => ({}))).detail || 'That file did not work'; $('secretErr').hidden = false; return; }
+      loadYT();
+    };
+  } else {
+    $('ytBox').innerHTML = `<div class="card card-row"><div class="grow"><h4>Not signed in</h4>
+        <p style="margin-top:2px">${yt.reason === 'no_channel' ? 'That Google account has no YouTube channel. Sign in again and pick the channel when Google asks.' : 'Pick the channel the Shorts should go to when Google asks.'}</p></div>
+        <a class="google-btn" href="/api/youtube/start">${G_MARK}Sign in with Google</a></div>`;
+  }
+  syncUpload();
+  loadJobs();
+}
+
+/* ---------- settings sheet ---------- */
+const bytes = n => n >= 1e9 ? (n / 1e9).toFixed(1) + ' GB' : n >= 1e6 ? Math.round(n / 1e6) + ' MB' : Math.round(n / 1e3) + ' KB';
+async function loadStorage() {
+  try {
+    const st = await api('/api/storage');
+    $('cacheSize').textContent = st.cache_bytes ? `${bytes(st.cache_bytes)} on this computer` : 'Nothing cached';
+    $('jobsSize').textContent = `${bytes(st.jobs_bytes)} on this computer`;
+  } catch { $('cacheSize').textContent = $('jobsSize').textContent = "Couldn't check"; }
+}
+$('clearCache').onclick = async () => {
+  $('clearCache').disabled = true;
+  try { const r = await api('/api/storage/cache', { method: 'DELETE' }); saveState(`Freed ${bytes(r.freed)}`, 'ok'); }
+  catch (e) { saveState(e.message, 'bad'); }
+  $('clearCache').disabled = false; loadStorage();
+};
+function openDrawer(section) {
+  loadStorage();
+  document.body.classList.add('drawer-open'); $('drawer').setAttribute('aria-hidden', 'false');
+  saveState('');
+  if (section) { const s = $(section); $('spane').scrollTop = s && section !== 's-ai' ? s.offsetTop - 8 : 0; markNav(section); }
+  $('closeSettings').focus();
+}
+function closeDrawer() {
+  flush();
+  document.body.classList.remove('drawer-open'); $('drawer').setAttribute('aria-hidden', 'true'); $('openSettings').focus();
+}
+function markNav(id) { document.querySelectorAll('#snav a').forEach(a => a.classList.toggle('on', a.dataset.s === id)); }
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-go]'); if (!t) return;
+  e.preventDefault(); openDrawer(t.dataset.go);
+});
+$('snav').addEventListener('click', e => {
+  const a = e.target.closest('a[data-s]'); if (!a) return;
+  e.preventDefault(); $(a.dataset.s).scrollIntoView({ block: 'start' }); markNav(a.dataset.s);
+});
+$('spane').addEventListener('scroll', () => {
+  const top = $('spane').getBoundingClientRect().top + 40;
+  let cur = 's-ai';
+  document.querySelectorAll('.sgroup').forEach(s => { if (s.getBoundingClientRect().top <= top) cur = s.id; });
+  const pane = $('spane'); if (pane.scrollTop + pane.clientHeight >= pane.scrollHeight - 4) cur = 's-disk';
+  markNav(cur);
+});
+$('closeSettings').onclick = closeDrawer; $('scrim').onclick = closeDrawer;
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.body.classList.contains('drawer-open')) closeDrawer(); });
+
+/* ---------- the link ---------- */
+function fits() { return meta && meta.duration ? Math.max(1, Math.floor(meta.duration / (length + 5))) : null; }
+function syncOpts() {
+  if (document.activeElement !== $('count')) $('count').value = count;
+  document.querySelectorAll('#lengthSeg button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.len === length)));
+  const moment = $('at').value.trim() !== '';
+  $('optCount').style.opacity = moment ? .4 : 1;
+  $('count').disabled = $('minus').disabled = $('plus').disabled = moment;
+  const f = fits();
+  $('countSub').textContent = moment ? 'One moment only' : f && count > f ? `This stream fits about ${f}` : 'As many as you like';
+  $('go').textContent = moment || count === 1 ? 'Make a Short' : `Make ${count} Shorts`;
+}
+function linkHasPermission() {
+  if (!meta) return true;
+  if (meta.kind === 'local') return true;
+  const src = settings && settings.sources.find(s => meta.channel && s.name.toLowerCase() === meta.channel.toLowerCase());
+  return src ? !!src.permission : !!meta.permission;
+}
+function syncUpload() {
+  const box = $('upload'), allowed = yt.connected && linkHasPermission();
+  box.disabled = !allowed;
+  box.checked = allowed && (settings ? settings.auto_upload : false);
+  $('uploadLabel').textContent = !yt.connected ? 'Post when done (sign in to YouTube first)'
+    : !allowed ? 'Post when done (needs their permission)' : 'Post when done';
+}
+$('minus').onclick = () => { count = Math.max(1, count - 1); syncOpts(); };
+$('plus').onclick = () => { count += 1; syncOpts(); };
+$('count').addEventListener('input', () => { const n = parseInt($('count').value, 10); if (n >= 1) { count = n; syncOpts(); } });
+$('count').addEventListener('blur', () => { $('count').value = count; });
+$('lengthSeg').onclick = e => { if (e.target.dataset.len) { length = +e.target.dataset.len; syncOpts(); } };
+$('at').oninput = syncOpts;
+
+function refreshPerm() {
+  const src = settings.sources.find(s => meta.channel && s.name.toLowerCase() === meta.channel.toLowerCase());
+  const has = src ? src.permission : meta.permission;
+  $('perm').hidden = has || meta.kind === 'local';
+  $('permBox').checked = !!has;
+  syncUpload();
+}
+$('permBox').onchange = async () => {
+  const src = settings.sources.find(s => meta.channel && s.name.toLowerCase() === meta.channel.toLowerCase());
+  if (src) { await api('/api/sources/' + src.id, { method: 'PATCH', body: JSON.stringify({ permission: $('permBox').checked }) }); await loadSettings(); refreshPerm(); }
+};
+
+let resolveTimer = null, resolving = '';
+$('link').addEventListener('input', () => {
+  clearTimeout(resolveTimer);
+  const v = $('link').value.trim();
+  $('linkErr').hidden = true;
+  if (!v) { meta = null; $('preview').hidden = true; $('perm').hidden = true; $('go').disabled = true; $('hint').hidden = false; syncOpts(); return; }
+  $('go').disabled = true;
+  resolveTimer = setTimeout(() => resolveLink(v), 450);
+});
+async function resolveLink(v) {
+  resolving = v;
+  $('hint').hidden = false; $('hint').textContent = 'Opening the link…';
+  try {
+    const m = await api('/api/resolve?url=' + encodeURIComponent(v));
+    if (resolving !== v) return;
+    meta = m; showPreview(); $('go').disabled = false;
+    $('hint').hidden = true;
+  } catch (e) {
+    if (resolving !== v) return;
+    meta = null; $('preview').hidden = true; $('hint').hidden = true;
+    $('linkErr').textContent = e.message; $('linkErr').hidden = false; syncOpts();
+  }
+}
+function showPreview() {
+  $('preview').hidden = false;
+  $('pvThumb').src = meta.thumbnail || ''; $('pvThumb').style.visibility = meta.thumbnail ? 'visible' : 'hidden';
+  $('pvChannel').textContent = meta.channel || meta.title;
+  $('pvTitle').textContent = meta.channel ? meta.title : '';
+  const f = [];
+  if (meta.kind === 'live') f.push(`<span class="fact live"><span class="dot live"></span>Live now${meta.viewers ? ', ' + compact(meta.viewers) + ' watching' : ''}</span>`);
+  if (meta.duration) f.push(`<span class="fact">${hours(meta.duration)}${meta.kind === 'live' ? ' so far' : ' long'}</span>`);
+  if (meta.views) f.push(`<span class="fact">${compact(meta.views)} views</span>`);
+  f.push(`<span class="fact">${esc(meta.platform)}</span>`);
+  $('pvFacts').innerHTML = f.join('');
+  $('at').value = meta.at != null ? hms(meta.at) : '';
+  refreshPerm(); syncOpts(); syncUpload(); syncAI();
+}
+
+$('linkForm').onsubmit = async e => {
+  e.preventDefault();
+  if (!meta) return;
+  $('go').disabled = true;
+  try {
+    await api('/api/jobs', { method: 'POST', body: JSON.stringify({
+      url: $('link').value.trim(), clips: count, length, at: $('at').value.trim() || null,
+      upload: $('upload').checked, ai: $('useAI').checked }) });
+    $('link').value = ''; meta = null; $('preview').hidden = true; $('perm').hidden = true; $('hint').hidden = false;
+    $('hint').textContent = 'Started. Follow it below.';
+    await loadJobs(); loadSettings();
+    document.querySelector('.entry')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (err) { $('linkErr').textContent = err.message; $('linkErr').hidden = false; $('go').disabled = false; }
+};
+
+/* ---------- journal ---------- */
+const STAGES = ['fetching', 'finding', 'cutting', 'uploading'];
+const STATE_TEXT = { queued: 'Waiting', fetching: 'Fetching the stream', finding: 'Finding moments', cutting: 'Cutting Shorts',
+                     uploading: 'Uploading', done: 'Done', failed: 'Stopped', cancelled: 'Cancelled' };
+const running = s => ['queued', 'fetching', 'finding', 'cutting', 'uploading'].includes(s);
+const seen = new Map();   // job id -> render signatures
+
+function stripSVG(j) {
+  const w = j.waveform || [], L = j.stream_length, n = w.length;
+  if (!L) return '';
+  if (!n && !j.clips.length && running(j.status)) return `<div class="strip-wait">The stream overview appears here once its audio is in</div>`;
+  const W = 1000, H = 48;
+  let bars = '';
+  if (n) {
+    const bw = W / n;
+    w.forEach((v, i) => {
+      const x = (i * bw).toFixed(1);
+      if (v < 0) bars += `<rect x="${x}" y="0" width="${(bw + .4).toFixed(1)}" height="${H}" fill="url(#mute)"/>`;
+      else { const h = Math.max(2, v * H); bars += `<rect x="${x}" y="${((H - h) / 2).toFixed(1)}" width="${Math.max(.6, bw - .5).toFixed(1)}" height="${h.toFixed(1)}" fill="var(--lilac)" opacity=".5"/>`; }
+    });
+  } else {
+    bars = `<rect x="0" y="${H/2 - 1}" width="${W}" height="2" fill="var(--edge)"/>`;
+  }
+  const marks = j.clips.map((c, i) => {
+    const x = c.start / L * W, wd = Math.max(5, (c.end - c.start) / L * W);
+    return `<rect class="mark-rect" data-job="${j.id}" data-i="${i}" x="${x.toFixed(1)}" y="-4" width="${wd.toFixed(1)}" height="${H + 8}" rx="2"><title>Short ${i + 1} at ${hms(c.start)}</title></rect>`;
+  }).join('');
+  const at = j.mode === 'moment' && j.at != null ? `<rect x="${(j.at / L * W).toFixed(1)}" y="-6" width="2" height="${H + 12}" fill="var(--street)"/>` : '';
+  const muted = w.some(v => v < 0);
+  return `<div class="strip"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Loudness across the stream, with the clipped moments marked">
+    <defs><pattern id="mute" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2" height="6" fill="var(--edge)"/></pattern></defs>
+    ${bars}${marks}${at}</svg>
+    <div class="axis"><span>0:00</span><span>${muted ? 'Hatched parts were muted by the platform' : ''}</span><span>${hms(L)}</span></div></div>`;
+}
+
+function headHTML(j) {
+  const m = j.meta || {}, who = (j.source && j.source.name) || m.channel || 'Stream';
+  const idx = STAGES.indexOf(j.status), done = j.status === 'done';
+  const steps = STAGES.map((s, i) => `<i class="${done || i < idx ? 'done' : i === idx ? 'now' : ''}"></i>`).join('');
+  const tags = (m.kind === 'live' ? '<span class="tag live"><span class="dot live"></span>Live</span>' : '')
+    + (j.ai ? '<span class="tag ai">AI picked</span>' : '');
+  const actions = running(j.status)
+    ? `<button class="btn small" data-act="cancel" data-id="${j.id}">Cancel</button>`
+    : `<button class="btn small" data-act="retry" data-id="${j.id}">Run again</button><button class="btn small quiet danger" data-act="delete" data-id="${j.id}">Delete</button>`;
+  return `<div class="entry-head"><div style="min-width:0"><div class="who">${esc(who)}${tags}</div>
+      <div class="what" title="${esc(m.title || j.url)}">${esc(m.title || j.url)}${j.mode === 'moment' ? `, one moment at ${hms(j.at)}` : ''}</div></div>
+      <div class="when">${new Date(j.created * 1000).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div></div>
+    <div class="status"><span class="state ${j.status} ${running(j.status) ? 'running' : ''}"><span class="dot"></span>${STATE_TEXT[j.status] || j.status}</span>
+      ${running(j.status) ? `<span class="steps" aria-hidden="true">${steps}</span>` : ''}
+      <span class="detail ${j.status === 'failed' ? 'failed' : ''}">${esc(j.detail || '')}</span>
+      <span class="actions">${actions}</span></div>`;
+}
+
+const hasPermission = j => j.meta && j.meta.kind === 'local'
+  || !!(settings && settings.sources.find(s => j.source && s.id === j.source.id && s.permission));
+
+function postBtn(j, c) {
+  if (c.youtube_id) return '';
+  if (c.posting) return `<button class="btn small post" type="button" disabled><span class="dot running-dot"></span>Posting</button>`;
+  if (running(j.status)) return '';
+  if (!yt.connected) return `<button class="btn small post" type="button" data-go="s-yt" title="Sign in to YouTube in Settings first">Post</button>`;
+  return `<button class="btn small post" type="button" data-post="${esc(c.file)}" data-id="${j.id}" title="Post publicly to ${esc(yt.channel || 'YouTube')}">Post${c.post_error ? ' again' : ''}</button>`;
+}
+function ytState(c) {
+  if (!c.youtube_id) return '';
+  if (c.privacy === 'public') return ` <a class="yt-state" href="https://youtu.be/${esc(c.youtube_id)}" target="_blank" rel="noopener"><span class="dot on"></span>Public on YouTube</a>`;
+  return ` <span class="yt-state locked" title="YouTube keeps uploads from apps it hasn't audited private. Publish it from Studio, or get the Cloud project audited"><span class="dot"></span>${c.privacy === 'unlisted' ? 'Unlisted' : 'Private'} on YouTube</span>`;
+}
+function infoHTML(j, c) {
+  const done = !running(j.status), busy = c.posting;
+  return `<div class="s-title" title="${esc(c.title)}">${esc(c.hook || c.title)}</div>
+      ${c.why ? `<div class="s-why">${esc(c.why)}</div>` : ''}
+      <div class="s-time">${hms(c.start)} to ${hms(c.end)}${ytState(c)}</div>
+      ${c.post_error ? `<div class="s-err">${esc(c.post_error)}</div>` : ''}
+      <div class="s-actions">
+        ${postBtn(j, c)}
+        ${c.youtube_id ? `<a class="btn small" href="https://studio.youtube.com/video/${esc(c.youtube_id)}/edit" target="_blank" rel="noopener">Open in Studio</a>` : ''}
+        <a class="btn small" href="/api/jobs/${j.id}/download/${encodeURIComponent(c.file)}">Download</a>
+        ${done && !busy && !c.youtube_id ? `<button class="btn small quiet" type="button" data-edit="${esc(c.file)}" data-id="${j.id}">Edit</button>` : ''}
+        ${done && !busy ? `<button class="btn small quiet danger" type="button" data-remove="${esc(c.file)}" data-id="${j.id}">Remove</button>` : ''}</div>`;
+}
+function editorHTML(c) {
+  return `<form class="editor form" data-file="${esc(c.file)}">
+      <label class="f" for="et-${esc(c.file)}">YouTube title</label>
+      <input type="text" id="et-${esc(c.file)}" name="title" maxlength="100" value="${esc(c.title)}">
+      <label class="f" for="ed-${esc(c.file)}">Description</label>
+      <textarea id="ed-${esc(c.file)}" name="description">${esc(c.description || '')}</textarea>
+      <p class="err" hidden></p>
+      <div class="s-actions"><button class="btn small post" type="submit">Save</button><button class="btn small quiet" type="button" data-cancel-edit>Cancel</button></div>
+    </form>`;
+}
+
+// Cards are updated one by one, so posting or editing one Short never reloads the others' players.
+function renderClips(j, box, isNew) {
+  let grid = box.querySelector('.shorts');
+  if (!j.clips.length) { box.innerHTML = ''; return; }
+  if (!grid) { grid = document.createElement('div'); grid.className = 'shorts'; box.replaceChildren(grid); }
+  const files = new Set(j.clips.map(c => c.file));
+  [...grid.children].forEach(card => { if (!files.has(card.dataset.file)) card.remove(); });
+  j.clips.forEach((c, i) => {
+    let card = grid.querySelector(`.short[data-file="${CSS.escape(c.file)}"]`);
+    if (!card) {
+      card = document.createElement('div');
+      card.className = 'short' + (isNew ? '' : ' fresh');
+      card.dataset.file = c.file; card.dataset.job = j.id;
+      card.innerHTML = `<div class="phone"><video src="/media/${j.id}/${encodeURIComponent(c.file)}#t=1" controls preload="metadata" playsinline></video><span class="num"></span></div><div class="info"></div>`;
+      card.querySelector('.phone').dataset.job = j.id;
+    }
+    card.dataset.i = i; card.querySelector('.phone').dataset.i = i;
+    card.querySelector('.num').textContent = i + 1;
+    if (grid.children[i] !== card) grid.insertBefore(card, grid.children[i] || null);
+    if (card.classList.contains('editing')) return;
+    const sig = JSON.stringify([yt.connected, running(j.status), c.title, c.hook, c.why, c.youtube_id, c.privacy, c.posting, c.post_error]);
+    if (card.dataset.sig !== sig) { card.querySelector('.info').innerHTML = infoHTML(j, c); card.dataset.sig = sig; }
+  });
+}
+
+let jobsCache = [];
+async function loadJobs() {
+  let list;
+  try { list = await api('/api/jobs'); } catch { return; }
+  jobsCache = list;
+  const box = $('jobs');
+  const total = list.reduce((a, j) => a + j.clips.length, 0);
+  $('journalCount').textContent = list.length ? `${plural(total, 'Short')} from ${plural(list.length, 'stream')}` : '';
+  if (!list.length) { box.innerHTML = '<p class="empty">Nothing clipped yet. Paste a link above and your Shorts land here.</p>'; seen.clear(); return; }
+  if (box.querySelector('.empty')) box.innerHTML = '';
+  const ids = new Set(list.map(j => j.id));
+  [...box.children].forEach(el => { if (!ids.has(el.dataset.id)) { el.remove(); seen.delete(el.dataset.id); } });
+  let prev = null;
+  for (const j of list) {
+    let el = box.querySelector(`.entry[data-id="${j.id}"]`);
+    const isNew = !el;
+    if (!el) {
+      el = document.createElement('article'); el.className = 'entry'; el.dataset.id = j.id;
+      el.innerHTML = '<div class="h"></div><div class="st"></div><div class="cl"></div><details class="log"><summary>Show log</summary><pre></pre></details>';
+      prev ? prev.after(el) : box.prepend(el);
+    }
+    prev = el;
+    const old = seen.get(j.id) || {};
+    const sig = { head: JSON.stringify([j.status, j.detail, j.meta && j.meta.title, j.ai]),
+                  strip: JSON.stringify([j.stream_length, (j.waveform || []).length, j.clips.map(c => [c.start, c.end])]),
+                  log: j.log.length };
+    if (sig.head !== old.head) el.querySelector('.h').innerHTML = headHTML(j);
+    if (sig.strip !== old.strip) el.querySelector('.st').innerHTML = stripSVG(j);
+    renderClips(j, el.querySelector('.cl'), isNew);
+    if (sig.log !== old.log) el.querySelector('pre').textContent = j.log.join('\n');
+    seen.set(j.id, sig);
+  }
+}
+const findClip = (id, file) => (jobsCache.find(j => j.id === id) || { clips: [] }).clips.find(c => c.file === file);
+
+$('jobs').addEventListener('click', async e => {
+  const p = e.target.closest('[data-post]');
+  if (p) {
+    const job = jobsCache.find(j => j.id === p.dataset.id);
+    if (job && !hasPermission(job) && !confirm(`No permission is recorded for ${job.source.name}. Posting their clip publicly can get a copyright strike. Post it anyway?`)) return;
+    p.disabled = true; p.textContent = 'Posting';
+    try { await api(`/api/jobs/${p.dataset.id}/post/${encodeURIComponent(p.dataset.post)}`, { method: 'POST' }); }
+    catch (err) { alert(err.message); }
+    return loadJobs();
+  }
+  const ed = e.target.closest('[data-edit]');
+  if (ed) {
+    const card = ed.closest('.short'), c = findClip(ed.dataset.id, ed.dataset.edit); if (!c) return;
+    card.classList.add('editing'); card.querySelector('.info').innerHTML = editorHTML(c);
+    card.querySelector('input[name=title]').focus();
+    return;
+  }
+  if (e.target.closest('[data-cancel-edit]')) {
+    const card = e.target.closest('.short'); card.classList.remove('editing'); card.dataset.sig = ''; return loadJobs();
+  }
+  const rm = e.target.closest('[data-remove]');
+  if (rm) {
+    const c = findClip(rm.dataset.id, rm.dataset.remove);
+    const msg = c && c.youtube_id ? 'Remove this Short from Cliphound? It stays on YouTube.' : 'Remove this Short from this computer?';
+    if (!confirm(msg)) return;
+    try { await api(`/api/jobs/${rm.dataset.id}/clips/${encodeURIComponent(rm.dataset.remove)}`, { method: 'DELETE' }); }
+    catch (err) { alert(err.message); }
+    return loadJobs();
+  }
+});
+$('jobs').addEventListener('submit', async e => {
+  const f = e.target.closest('form.editor'); if (!f) return;
+  e.preventDefault();
+  const card = f.closest('.short'), err = f.querySelector('.err');
+  try {
+    await api(`/api/jobs/${card.dataset.job}/clips/${encodeURIComponent(card.dataset.file)}`, { method: 'PATCH',
+      body: JSON.stringify({ title: f.title.value, description: f.description.value }) });
+    card.classList.remove('editing'); card.dataset.sig = ''; loadJobs();
+  } catch (x) { err.textContent = x.message; err.hidden = false; }
+});
+$('jobs').addEventListener('click', async e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const { act, id } = b.dataset;
+  if (act === 'delete' && !confirm('Delete this entry and its Shorts from this computer?')) return;
+  try {
+    if (act === 'delete') await api('/api/jobs/' + id, { method: 'DELETE' });
+    else await api(`/api/jobs/${id}/${act}`, { method: 'POST' });
+  } catch (err) { alert(err.message); }
+  loadJobs();
+});
+// Pair the strip marks with their Shorts.
+function hot(el, on) {
+  const { job, i } = el.dataset; if (!job) return;
+  document.querySelectorAll(`[data-job="${job}"][data-i="${i}"]`).forEach(x => x.classList.toggle('hot', on));
+}
+$('jobs').addEventListener('mouseover', e => { const t = e.target.closest('[data-i]'); if (t) hot(t, true); });
+$('jobs').addEventListener('mouseout', e => { const t = e.target.closest('[data-i]'); if (t) hot(t, false); });
+$('jobs').addEventListener('click', e => {
+  const t = e.target.closest('.mark-rect'); if (!t) return;
+  const card = document.querySelector(`.short[data-job="${t.dataset.job}"][data-i="${t.dataset.i}"]`);
+  if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); card.querySelector('video').play().catch(() => {}); }
+});
+
+loadSettings().then(() => { loadYT(); loadAI(); });
+if (location.search) history.replaceState(null, '', '/');
+loadJobs();
+setInterval(loadJobs, 2000);
+</script>
+</body>
+</html>

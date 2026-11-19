@@ -1,0 +1,3 @@
+#!/bin/sh
+# Start Cliphound at http://127.0.0.1:8765
+cd "$(dirname "$0")" && exec uv run uvicorn cliphound.app:app --host 127.0.0.1 --port 8765
